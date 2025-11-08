@@ -16,16 +16,20 @@ import argparse
 from track_performance import ExperimentTracker
 
 # =================== Quantum Layer Definition ===================
-def create_quantum_circuit(n_qubits: int, n_layers: int = 2):
+def create_quantum_circuit(n_qubits: int, n_layers: int = 2, use_local: bool = False):
     """
     Create a parameterized quantum circuit
     Args:
         n_qubits: Number of qubits (should match input dimension)
         n_layers: Number of variational layers
+        use_local: If True, use local simulator instead of AWS Braket
     """
-    dev = qml.device("braket.aws.qubit", 
-                     device_arn="arn:aws:braket:::device/quantum-simulator/amazon/sv1",
-                     wires=n_qubits)
+    if use_local:
+        dev = qml.device("default.qubit", wires=n_qubits)
+    else:
+        dev = qml.device("braket.aws.qubit", 
+                         device_arn="arn:aws:braket:::device/quantum-simulator/amazon/sv1",
+                         wires=n_qubits)
     
     @qml.qnode(dev, interface="torch")
     def quantum_circuit(inputs, weights):
@@ -40,11 +44,9 @@ def create_quantum_circuit(n_qubits: int, n_layers: int = 2):
                 qml.RY(weights[layer * n_qubits * 2 + i], wires=i)
                 qml.RZ(weights[layer * n_qubits * 2 + n_qubits + i], wires=i)
             
-            # Entanglement
+            # Entanglement (linear chain)
             for i in range(n_qubits - 1):
                 qml.CNOT(wires=[i, i + 1])
-            if n_qubits > 2:
-                qml.CNOT(wires=[n_qubits - 1, 0])  # Circular entanglement
         
         # Measure expectations
         return [qml.expval(qml.PauliZ(i)) for i in range(n_qubits)]
@@ -53,32 +55,32 @@ def create_quantum_circuit(n_qubits: int, n_layers: int = 2):
 
 # =================== Hybrid Model ===================
 class QuantumHybridCNN(nn.Module):
-    def __init__(self, n_qubits: int = 4, n_quantum_layers: int = 2):
+    def __init__(self, n_qubits: int = 4, n_quantum_layers: int = 2, use_local: bool = False):
         super().__init__()
         self.n_qubits = n_qubits
         
-        # Classical feature extraction (same as baseline)
+        # Classical feature extraction (match teammate's architecture)
         self.conv_layers = nn.Sequential(
-            nn.Conv2d(3, 32, 3, padding=1),
+            nn.Conv2d(3, 16, 3, padding=1),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.MaxPool2d(2),
+            nn.Conv2d(16, 32, 3, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.MaxPool2d(2),
-            nn.Conv2d(32, 64, 3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(2),
-            nn.Conv2d(64, 128, 3, padding=1),
-            nn.BatchNorm2d(128),
+            nn.Conv2d(32, 32, 3, padding=1),
+            nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.MaxPool2d(2)
         )
         
         # Reduce to quantum input dimension
-        self.fc_to_quantum = nn.Linear(128 * 4 * 4, n_qubits)
+        self.fc_to_quantum = nn.Linear(32 * 4 * 4, n_qubits)
         
         # Quantum layer
         n_weights = n_qubits * 2 * n_quantum_layers
-        quantum_circuit = create_quantum_circuit(n_qubits, n_quantum_layers)
+        quantum_circuit = create_quantum_circuit(n_qubits, n_quantum_layers, use_local)
         self.quantum_layer = qml.qnn.TorchLayer(quantum_circuit, {"weights": (n_weights,)})
         
         # Final classifier
@@ -181,27 +183,32 @@ def main():
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--quantum-qubits', type=int, default=4)
     parser.add_argument('--quantum-layers', type=int, default=2)
+    parser.add_argument('--local', action='store_true', help='Use local simulator instead of AWS Braket')
     args = parser.parse_args()
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    simulator_type = "local" if args.local else "AWS Braket"
     print(f"Using device: {device}")
+    print(f"Quantum simulator: {simulator_type}")
     
     # Setup tracking
-    tracker = ExperimentTracker('quantum', f'{args.quantum_qubits}qubits_{args.quantum_layers}layers')
+    tracker = ExperimentTracker('quantum', f'{args.quantum_qubits}qubits_{args.quantum_layers}layers_{simulator_type.replace(" ", "_")}')
     tracker.set_hyperparameters(
         batch_size=args.batch_size,
         epochs=args.epochs,
         learning_rate=args.lr,
         quantum_qubits=args.quantum_qubits,
         quantum_layers=args.quantum_layers,
-        optimizer='Adam'
+        optimizer='Adam',
+        quantum_simulator=simulator_type,
+        architecture='16->32->32 filters (matching classical)'
     )
     
     # Load data
     trainloader, validloader, testloader = get_data_loaders(args.batch_size)
     
     # Create model
-    model = QuantumHybridCNN(n_qubits=args.quantum_qubits, n_quantum_layers=args.quantum_layers).to(device)
+    model = QuantumHybridCNN(n_qubits=args.quantum_qubits, n_quantum_layers=args.quantum_layers, use_local=args.local).to(device)
     print(f"Model created with {args.quantum_qubits} qubits and {args.quantum_layers} quantum layers")
     
     # Train
@@ -213,8 +220,9 @@ def main():
     print(f"Test Accuracy: {accuracy:.2f}%")
     
     # Save results
-    tracker.add_note(f"Quantum hybrid CNN with {args.quantum_qubits} qubits")
-    tracker.save()
+    tracker.add_note(f"Quantum hybrid CNN with {args.quantum_qubits} qubits using {simulator_type}")
+    saved_path = tracker.save()
+    print(f"\n✓ Experiment results saved to: {saved_path}")
 
 if __name__ == '__main__':
     main()
