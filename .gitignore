@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.DS_Store
+
+# Jupyter/IPython
+.ipynb_checkpoints
+
+# Conda environments
+.env/
+env/
+venv/
+.venv/
+cnn/
+
+# VSCode/IDE/
+.vscode/
+.idea/
+*.sublime-workspace
+
+# Log/output files
+*.log
+*.out
+
+# Data/cache
+*.h5
+*.pth
+*.pt
+*.model
+*.tar.gz
+*.npz
+data/
+output/
+logs/
+__output__/
+.cache/
+
+# Torchvision download cache
+data/
+torch_datasets/
+
+# Ignore system files
+Thumbs.db
+
+# OS generated files
+.DS_Store
+
+# C-extension build folders
+build/
+dist/

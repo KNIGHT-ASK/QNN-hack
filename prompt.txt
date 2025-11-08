@@ -1,0 +1,23 @@
+PyTorch CIFAR-10 Image Classification Project
+
+Implement a compact, easy-to-edit convolutional neural network (CNN) for image classification on the CIFAR-10 dataset using PyTorch. This project is designed for experimentation: all sections and layers should be clearly written and demarcated to make changing the architecture simple—even for beginners.
+
+**Project Requirements:**
+1. **Model Simplicity**: Use a minimal CNN (2–3 convolutional layers, plus dense/output layers). Code for layers must be transparent, modular, and well-commented.
+2. **PyTorch/Torchvision Only**: Use only standard PyTorch and torchvision utilities for dataset downloading, loading, and transforms.
+3. **Visualization**: 
+   - Show a selection of CIFAR-10 sample images with their true labels before training.
+   - After training, plot training/validation loss curves and display final test accuracy.
+4. **Project Structure**:
+   - Delineate all key sections: data loading, visualization, model definition (in a `SimpleCNN` class), training loop, evaluation, and result plotting.
+   - Make it easy to change the layer configuration by editing the `SimpleCNN` class only.
+5. **Readability**: Include clear comments explaining each code block and design choice. Section headers are strongly encouraged.
+6. **Reproducibility & Usability**: Ensure the code runs reliably on a MacBook Pro (i9, 32GB RAM) or similar machine.
+7. **Reference**: Only use the following Keras-based guides for architectural or workflow ideas. All code must be written in PyTorch:
+   - https://pythonguides.com/image-classification-using-cnn-keras/
+   - https://www.geeksforgeeks.org/machine-learning/python-image-classification-using-keras/
+   - https://medium.com/data-bistrot/a-simple-image-classifier-with-a-python-neural-network-82a5522fe48b
+   - https://codezup.com/image-classification-neural-network-keras-python/
+8. **Instructions**: At the top of your implementation, briefly note how to run the code and which part to edit (the `SimpleCNN` class) for changing the architecture.
+
+**Goal:** Deliver a functional, beginner-friendly image classification starter project that can be easily extended by modifying the network architecture or experimenting with different layers. 
