@@ -25,7 +25,32 @@ import json
 # Import our optimized models
 from cnn_model import PureCNN
 from qnn_model import HybridDensityQNN, QuantumCircuit
-load_dotenv()
+
+# Function to safely get and mask sensitive environment variables
+def get_masked_env(var_name):
+    value = os.getenv(var_name, '')
+    if value and var_name in ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']:
+        return value[:4] + '*' * (len(value) - 8) + value[-4:]
+    return value
+
+# Function to update AWS configuration
+def update_aws_config(region=None, access_key=None, secret_key=None, device_arn=None):
+    if region:
+        os.environ['AWS_DEFAULT_REGION'] = region
+    if access_key:
+        os.environ['AWS_ACCESS_KEY_ID'] = access_key
+    if secret_key:
+        os.environ['AWS_SECRET_ACCESS_KEY'] = secret_key
+    if device_arn:
+        os.environ['BRAKET_DEVICE'] = device_arn
+    
+    clear_output()
+    print("Updated AWS Configuration:")
+    print(f"Region: {get_masked_env('AWS_DEFAULT_REGION')}")
+    print(f"Access Key ID: {get_masked_env('AWS_ACCESS_KEY_ID')}")
+    print(f"Secret Access Key: {get_masked_env('AWS_SECRET_ACCESS_KEY')}")
+    print(f"Braket Device: {get_masked_env('BRAKET_DEVICE')}")
+
 
 class ModelTrainer:
     """Efficient model trainer with performance tracking"""
@@ -298,6 +323,13 @@ if __name__ == "__main__":
         'test_size': 1000,  # Use smaller test set for faster iteration
         'train_size': 5000  # Use smaller training set for faster iteration
     }
+    
+    # os.getenv
+        
+    # Load environment variables from .env file
+    load_dotenv()
+    # update_aws_config(os.getenv())
+
     
     # Run experiment
     runner = ExperimentRunner(config)

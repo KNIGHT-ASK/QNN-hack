@@ -33,7 +33,7 @@ class QuantumCircuit:
     """Quantum circuit definition for the hybrid model and small ping-layer generator."""
 
     def __init__(self, num_qubits: int = 7, shots: Optional[int] = 10,QNN_layers=10):
-        print(f"Init Quantum circuit, QNN_layers: {QNN_layers}, qubits: {num_qubits}")
+        print(f"Init Quantum circuit, QNN_layers: {QNN_layers}")
         self.num_qubits = num_qubits
         self.QNN_layers = QNN_layers
         # Allow override with env var BRAKET_SHOTS or default to None (analytic/statevector) for local
