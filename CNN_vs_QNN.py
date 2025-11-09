@@ -13,6 +13,8 @@ import json
 
 # Load environment variables
 load_dotenv()
+from cnn_model import PureCNN, ModelTrainer
+from qnn_model import HybridDensityQNN, QuantumCircuit
 
 class DryRunTester:
     """Comprehensive dry-run testing for all components"""
@@ -319,216 +321,6 @@ class DryRunTester:
         
         print("=" * 70)
 
-
-class QuantumCircuit:
-    """Quantum circuit definition for the hybrid model"""
-    
-    def __init__(self, num_qubits=4, shots=100):
-        self.num_qubits = num_qubits
-        self.shots = shots
-        self.device = self._setup_device()
-    
-    def _setup_device(self):
-        """Setup quantum device - use default simulator for testing"""
-        try:
-            return qml.device(
-                "braket.aws.qubit",
-                device_arn=os.getenv('BRAKET_DEVICE', 'arn:aws:braket:::device/quantum-simulator/amazon/sv1'),
-                wires=self.num_qubits,
-                shots=self.shots
-            )
-        except:
-            # Fallback to default simulator
-            return qml.device("default.qubit", wires=self.num_qubits, shots=self.shots)
-    
-    @property
-    def circuit(self):
-        """Density QNN: Sub-unitary quantum circuit (RBS-based)"""
-        @qml.qnode(self.device, interface="torch")
-        def quantum_sub_circuit(inputs, weights):
-            # Data encoding
-            for i in range(self.num_qubits):
-                qml.RY(inputs[i], wires=i)
-            
-            # Parameterized RBS-inspired gates
-            for i in range(self.num_qubits):
-                qml.RZ(weights[i], wires=i)
-            
-            # Entanglement (CNOT ladder)
-            for i in range(self.num_qubits - 1):
-                qml.CNOT(wires=[i, i + 1])
-            
-            # Second rotation layer
-            for i in range(self.num_qubits):
-                qml.RY(weights[i + self.num_qubits], wires=i)
-            
-            return [qml.expval(qml.PauliZ(i)) for i in range(self.num_qubits)]
-        
-        return quantum_sub_circuit
-
-
-class PureCNN(nn.Module):
-    """Pure CNN baseline model"""
-    
-    def __init__(self):
-        super(PureCNN, self).__init__()
-        # CNN feature extractor
-        self.conv1 = nn.Conv2d(3, 8, 5)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(8, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, 4)
-        
-        # Extra classical layer to match quantum layer capacity
-        self.fc_quantum_equiv = nn.Linear(4, 4)
-        
-        # Final classifier
-        self.fc2 = nn.Linear(4, 10)
-    
-    def forward(self, x):
-        x = self.pool(torch.relu(self.conv1(x)))
-        x = self.pool(torch.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)
-        x = torch.tanh(self.fc1(x))
-        x = torch.relu(self.fc_quantum_equiv(x))
-        x = self.fc2(x)
-        return x
-
-
-class HybridDensityQNN(nn.Module):
-    """Hybrid CNN + Quantum Neural Network"""
-    
-    def __init__(self, num_sub_unitaries=2, num_qubits=4):
-        super(HybridDensityQNN, self).__init__()
-        
-        # CNN feature extractor
-        self.conv1 = nn.Conv2d(3, 8, 5)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(8, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, num_qubits)
-        
-        # Density QNN: K sub-unitaries with independent parameters
-        self.K = num_sub_unitaries
-        self.num_qubits = num_qubits
-        
-        # Create quantum layers
-        quantum_circuit = QuantumCircuit(num_qubits=num_qubits).circuit
-        self.quantum_layers = nn.ModuleList([
-            qml.qnn.TorchLayer(quantum_circuit, {"weights": (num_qubits * 2,)})
-            for _ in range(self.K)
-        ])
-        
-        # Trainable mixing coefficients α_k
-        self.alpha = nn.Parameter(torch.ones(self.K))
-        
-        # Final classifier
-        self.fc2 = nn.Linear(num_qubits, 10)
-    
-    def forward(self, x):
-        batch_size = x.shape[0]
-        
-        # CNN feature extraction
-        x = self.pool(torch.relu(self.conv1(x)))
-        x = self.pool(torch.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)
-        x = torch.tanh(self.fc1(x))  # Shape: [batch_size, num_qubits]
-        
-        # Process each sample through quantum circuits individually
-        quantum_outputs = []
-        
-        for i in range(batch_size):
-            # Get single sample
-            sample = x[i]  # Shape: [num_qubits]
-            
-            # Process through all quantum sub-unitaries
-            circuit_outputs = []
-            for k in range(self.K):
-                circuit_out = self.quantum_layers[k](sample)  # Process single sample
-                circuit_outputs.append(circuit_out)
-            
-            # Weighted combination
-            alpha_norm = torch.softmax(self.alpha, dim=0)
-            weighted_out = sum(alpha_norm[k] * circuit_outputs[k] for k in range(self.K))
-            quantum_outputs.append(weighted_out)
-        
-        # Stack results back to batch
-        quantum_out = torch.stack(quantum_outputs)  # Shape: [batch_size, num_qubits]
-        
-        # Classification
-        out = self.fc2(quantum_out)
-        return out
-
-
-class ModelTrainer:
-    """Handles model training and evaluation"""
-    
-    def __init__(self, model, model_name, device='cpu'):
-        self.model = model
-        self.model_name = model_name
-        self.device = device
-        self.model.to(device)
-        
-        self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-        
-        # Training history
-        self.train_losses = []
-        self.train_accuracies = []
-        self.test_accuracies = []
-        self.iteration_times = []
-    
-    def train_epoch(self, train_loader):
-        """Train for one epoch"""
-        self.model.train()
-        running_loss = 0.0
-        correct = 0
-        total = 0
-        
-        start_time = time.time()
-        
-        for batch_idx, (data, target) in enumerate(train_loader):
-            data, target = data.to(self.device), target.to(self.device)
-            
-            self.optimizer.zero_grad()
-            output = self.model(data)
-            loss = self.criterion(output, target)
-            loss.backward()
-            self.optimizer.step()
-            
-            running_loss += loss.item()
-            _, predicted = output.max(1)
-            total += target.size(0)
-            correct += predicted.eq(target).sum().item()
-        
-        epoch_time = time.time() - start_time
-        self.iteration_times.append(epoch_time)
-        
-        epoch_loss = running_loss / len(train_loader)
-        epoch_acc = 100. * correct / total
-        
-        self.train_losses.append(epoch_loss)
-        self.train_accuracies.append(epoch_acc)
-        
-        return epoch_loss, epoch_acc
-    
-    def evaluate(self, test_loader):
-        """Evaluate model on test set"""
-        self.model.eval()
-        correct = 0
-        total = 0
-        
-        with torch.no_grad():
-            for data, target in test_loader:
-                data, target = data.to(self.device), target.to(self.device)
-                output = self.model(data)
-                _, predicted = output.max(1)
-                total += target.size(0)
-                correct += predicted.eq(target).sum().item()
-        
-        accuracy = 100. * correct / total
-        self.test_accuracies.append(accuracy)
-        return accuracy
-
-
 class PerformanceTracker:
     """Tracks and visualizes model performance"""
     
@@ -753,11 +545,11 @@ if __name__ == "__main__":
         print("ALL TESTS PASSED! Starting main experiment...")
         print("🎉" * 20)
         
-        # Run the main experiment
-        runner = ExperimentRunner(num_iterations=3, batch_size=4)
-        results = runner.run_experiment()
+        # # Run the main experiment
+        # runner = ExperimentRunner(num_iterations=3, batch_size=4)
+        # results = runner.run_experiment()
         
-        print("\n🏁 EXPERIMENT COMPLETED SUCCESSFULLY!")
+        # print("\n🏁 EXPERIMENT COMPLETED SUCCESSFULLY!")
     else:
         print("\n" + "❌" * 20)
         print("TESTS FAILED! Please fix the issues above before running the main experiment.")
