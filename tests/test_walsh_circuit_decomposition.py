@@ -50,11 +50,11 @@ def test_invalid_input_walsh_coefficients():
         Walsh_coefficients(np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
     
     # Test non-diagonal matrix
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         Walsh_coefficients(np.array([[1, 1], [0, 1]]))
     
     # Test non-unitary diagonal elements
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         Walsh_coefficients(np.array([[2, 0], [0, 1]]))
 
 def test_larger_circuit_construction():

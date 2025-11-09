@@ -58,12 +58,12 @@ def Walsh_coefficients(matrix: np.ndarray) -> np.ndarray:
     d = np.diag(matrix)
     
     # Check if matrix is diagonal
-    assert np.allclose(matrix, np.diag(d), atol=1e-10), \
-        "Walsh decomposition requires a DIAGONAL matrix"
+    if not np.allclose(matrix, np.diag(d), atol=1e-10):
+        raise ValueError("Walsh decomposition requires a DIAGONAL matrix")
     
     # Check diagonal elements are on unit circle
-    assert np.allclose(np.abs(d), 1.0, atol=1e-12), \
-        "All diagonal elements must have magnitude 1 (be on unit circle)"
+    if not np.allclose(np.abs(d), 1.0, atol=1e-12):
+        raise ValueError("All diagonal elements must have magnitude 1 (be on unit circle)")
 
     # Compute Walsh coefficients
     f = np.angle(d)   

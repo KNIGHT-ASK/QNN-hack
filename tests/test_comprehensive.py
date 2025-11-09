@@ -195,7 +195,7 @@ def test_walsh_decomposition():
         failed += 1
     
     print(f"\nWalsh Tests: {passed} passed, {failed} failed")
-    return passed, failed
+    assert failed == 0, f"{failed} Walsh tests failed"
 
 
 # ============================================================================
@@ -387,7 +387,7 @@ def test_density_qnn():
         failed += 1
     
     print(f"\nDensity QNN Tests: {passed} passed, {failed} failed")
-    return passed, failed
+    assert failed == 0, f"{failed} Density QNN tests failed"
 
 
 # ============================================================================
@@ -395,21 +395,18 @@ def test_density_qnn():
 # ============================================================================
 
 if __name__ == "__main__":
-    walsh_passed, walsh_failed = test_walsh_decomposition()
-    density_passed, density_failed = test_density_qnn()
-    
-    total_passed = walsh_passed + density_passed
-    total_failed = walsh_failed + density_failed
-    
-    print("\n" + "="*70)
-    print("FINAL SUMMARY")
-    print("="*70)
-    print(f"Total tests passed: {total_passed}")
-    print(f"Total tests failed: {total_failed}")
-    
-    if total_failed == 0:
+    try:
+        test_walsh_decomposition()
+        test_density_qnn()
+        
+        print("\n" + "="*70)
+        print("FINAL SUMMARY")
+        print("="*70)
         print("\n✅ ALL TESTS PASSED!")
-    else:
-        print(f"\n❌ {total_failed} TESTS FAILED")
-    
-    print("="*70)
+        print("="*70)
+    except AssertionError as e:
+        print("\n" + "="*70)
+        print("FINAL SUMMARY")
+        print("="*70)
+        print(f"\n❌ TESTS FAILED: {e}")
+        print("="*70)
