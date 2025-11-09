@@ -62,11 +62,11 @@ Although we didn’t get a fully functional QNN running at full scale, this proj
 
 
 **Resources We Used for Research**
-*https://engineering.lehigh.edu/sites/engineering.lehigh.edu/files/_DEPARTMENTS/ise/pdf/tech-papers/24/24T_011.pdf
-*https://en.wikipedia.org/wiki/Quantum_neural_network
-*https://pennylane.ai/qml/glossary/quantum_neural_network
-*https://pennylane.ai/qml/demos/tutorial_quanvolution
-*https://quantumzeitgeist.com/quantum-neural-variational-networks-models-forecast-multivariate-time-series-data-extending-complex-dependencies/
-*https://www.nature.com/articles/s41534-025-01099-6
-*https://scisimple.com/en/articles/2025-11-05-quantum-neural-networks-a-new-frontier-in-machine-learning--a98l0z8
-*https://youtu.be/xL383DseSpE?si=lHwUaV7uTrddRB0r
+* https://engineering.lehigh.edu/sites/engineering.lehigh.edu/files/_DEPARTMENTS/ise/pdf/tech-papers/24/24T_011.pdf
+* https://en.wikipedia.org/wiki/Quantum_neural_network
+* https://pennylane.ai/qml/glossary/quantum_neural_network
+* https://pennylane.ai/qml/demos/tutorial_quanvolution
+* https://quantumzeitgeist.com/quantum-neural-variational-networks-models-forecast-multivariate-time-series-data-extending-complex-dependencies/
+* https://www.nature.com/articles/s41534-025-01099-6
+* https://scisimple.com/en/articles/2025-11-05-quantum-neural-networks-a-new-frontier-in-machine-learning--a98l0z8
+* https://youtu.be/xL383DseSpE?si=lHwUaV7uTrddRB0r
