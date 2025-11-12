@@ -79,26 +79,44 @@ class QuantumCircuit:
 
     @property
     def circuit(self):
-        """Return a callable QNode (quantum sub-circuit) suitable for wrapping by TorchLayer."""
+        """
+        Return a callable QNode (quantum sub-circuit) suitable for wrapping by TorchLayer.
+        
+        This implements the density matrix approach from the paper:
+        "Training-efficient density quantum machine learning"
+        
+        The key idea:
+        - Create a large unitary U = sum(w_i * RBS_net_i) where w_i are trainable weights
+        - Each RBS_net_i uses a different entanglement pattern (pyramid, X, butterfly, round-robin)
+        - Apply U to the quantum state using diagonalization: U = V @ D @ V†
+        - Use Walsh decomposition to compile V and D into CNOT and RZ gates
+        """
 
         # Prepare the density quantum layer with all 4 paper patterns (Figure 9)
-        # This uses: pyramid, X-circuit, butterfly, and round-robin
+        # This creates the function: weights -> U (density matrix)
+        # U = sum(w_i * RBS_net_i) where each RBS_net_i has different entanglement
         quantum_layer = density_layer(
             self.num_qubits, 
             self.QNN_layers,
-            patterns=None  # Uses all 4 paper patterns by default
+            patterns=None  # Uses all 4 paper patterns by default: pyramid, X, butterfly, round-robin
         )
         
         @qml.qnode(self.device, interface="torch")
         def quantum_sub_circuit(inputs, weights):
             """
-            Density matrix quantum circuit with proper diagonalization.
+            Quantum circuit implementing: |ψ_out⟩ = U |ψ_in⟩
             
-            This implements the full density QNN approach:
-            1. Encode classical data into quantum state
-            2. Create density matrix from weighted RBS networks
-            3. Diagonalize the density matrix
-            4. Apply using Walsh decomposition
+            Where:
+            - |ψ_in⟩ is encoded from classical inputs using RY rotations
+            - U = sum(w_i * RBS_net_i) is the trainable density matrix
+            - U is applied via diagonalization: U = V @ D @ V†
+            
+            Circuit structure:
+            1. Data encoding: RY(input_i) on each qubit
+            2. Apply V (change of basis to diagonal)
+            3. Apply D (diagonal unitary - easy to implement)
+            4. Apply V† (change back to original basis)
+            5. Measure: ⟨Z_i⟩ for each qubit
             
             Args:
                 inputs: shape (num_qubits,) - feature vector from CNN
@@ -107,23 +125,42 @@ class QuantumCircuit:
             Returns:
                 List of expectation values, one per qubit
             """
-            # Step 1: Data encoding - embed CNN features into quantum states
-            # Using amplitude encoding with RY rotations
+            
+            # ============================================================
+            # STEP 1: DATA ENCODING
+            # ============================================================
+            # Encode classical data into quantum state using amplitude encoding
+            # We use RY rotations scaled by π/2 as per literature
+            # This maps input features to qubit rotation angles
             for i in range(self.num_qubits):
                 qml.RY(inputs[i] * pi/2, wires=i)
             
-            # Step 2: Create density matrix from weighted sum of RBS networks
+            # ============================================================
+            # STEP 2: CREATE DENSITY MATRIX U
+            # ============================================================
+            # Compute U = sum(w_i * RBS_net_i) where:
+            # - w_i are the trainable weights (normalized via softmax in density_layer)
+            # - RBS_net_i are pre-generated RBS networks with different entanglement patterns
+            # This creates a large unitary transformation that will be applied to the state
             density_matrix = quantum_layer(weights)
             
-            # Step 3: Diagonalize the density matrix
-            # This gives us: density_matrix = U @ D @ U†
-            # where D is diagonal and U is the transformation
+            # ============================================================
+            # STEP 3: DIAGONALIZE U = V @ D @ V†
+            # ============================================================
+            # Since U is a general unitary, we can't directly apply it in a quantum circuit
+            # Solution: Diagonalize it!
+            # - D is diagonal (easy to implement with RZ gates via Walsh decomposition)
+            # - V is the change-of-basis transformation
+            # This decomposition allows us to implement any unitary U efficiently
             diag_matrix, transform_matrix = diagonalize_unitary(density_matrix)
             
-            # Step 4: Apply the unitary transformation
-            # We need to apply: U @ D @ U†
+            # ============================================================
+            # STEP 4: APPLY U = V @ D @ V† TO THE QUANTUM STATE
+            # ============================================================
             
-            # 4a: Apply U (transformation to diagonal basis)
+            # 4a: Apply V (transformation to diagonal basis)
+            # This changes the basis so that U becomes diagonal
+            # We use Walsh decomposition to compile V into CNOT and RZ gates
             transform_circuit = build_optimal_walsh_circuit(torch.tensor(transform_matrix, dtype=torch.complex64))
             for gate in transform_circuit:
                 if gate[0] == "CNOT":
@@ -131,7 +168,9 @@ class QuantumCircuit:
                 elif gate[0] == "RZ":
                     qml.RZ(gate[1][0], wires=gate[1][1])
             
-            # 4b: Apply D (diagonal unitary using Walsh decomposition)
+            # 4b: Apply D (diagonal unitary)
+            # Since D is diagonal, we can apply it efficiently using Walsh decomposition
+            # This is the "meat" of the transformation - the actual learned unitary
             diag_circuit = build_optimal_walsh_circuit(diag_matrix)
             for gate in diag_circuit:
                 if gate[0] == "CNOT":
@@ -139,14 +178,21 @@ class QuantumCircuit:
                 elif gate[0] == "RZ":
                     qml.RZ(gate[1][0], wires=gate[1][1])
             
-            # 4c: Apply U† (inverse transformation)
+            # 4c: Apply V† (inverse transformation back to original basis)
+            # This undoes the basis change from step 4a
+            # For CNOT: it's self-inverse, so we just apply it again
+            # For RZ(θ): the inverse is RZ(-θ)
             for gate in reversed(transform_circuit):
                 if gate[0] == "CNOT":
-                    qml.CNOT(wires=gate[1])  # CNOT is self-inverse
+                    qml.CNOT(wires=gate[1])  # CNOT is self-inverse: CNOT @ CNOT = I
                 elif gate[0] == "RZ":
-                    qml.RZ(-gate[1][0], wires=gate[1][1])  # Inverse rotation
+                    qml.RZ(-gate[1][0], wires=gate[1][1])  # Inverse rotation: RZ(-θ)
             
-            # Step 5: Measurement
+            # ============================================================
+            # STEP 5: MEASUREMENT
+            # ============================================================
+            # Measure the expectation value of Pauli-Z on each qubit
+            # This gives us the output features that go to the classical layer
             return [qml.expval(qml.PauliZ(i)) for i in range(self.num_qubits)]
 
         return quantum_sub_circuit
@@ -169,10 +215,14 @@ class HybridDensityQNN(nn.Module):
 
         # Build quantum circuit
         qc = QuantumCircuit(num_qubits=num_qubits, QNN_layers=num_sub_unitaries, shots=None)
-        self.quantum_circuit = qc.circuit
+        quantum_circuit = qc.circuit
         
-        # Create trainable weights for quantum layer
-        self.quantum_weights = torch.nn.Parameter(torch.randn(num_sub_unitaries) * 0.1)
+        # Wrap quantum circuit in TorchLayer for automatic batching and gradient computation
+        # TorchLayer handles:
+        # - Batching: processes multiple samples efficiently
+        # - Gradients: computes gradients w.r.t. quantum parameters
+        # - Integration: seamless PyTorch nn.Module integration
+        self.qlayer = qml.qnn.TorchLayer(quantum_circuit, {"weights": (num_sub_unitaries,)})
 
         # Final classifier
         self.fc2 = nn.Linear(num_qubits, 10)
@@ -181,31 +231,41 @@ class HybridDensityQNN(nn.Module):
         """
         Forward pass through hybrid CNN-QNN.
         
+        Architecture:
+        1. CNN feature extraction (conv layers + pooling)
+        2. Fully connected layer to reduce to num_qubits features
+        3. Quantum layer applies U = V @ D @ V† transformation
+        4. Final classification layer
+        
         Args:
             x: Input tensor of shape (batch_size, 3, 32, 32)
             
         Returns:
             Output logits of shape (batch_size, 10)
         """
-        batch_size = x.shape[0]
+        # ============================================================
+        # CLASSICAL FEATURE EXTRACTION
+        # ============================================================
+        # Standard CNN layers to extract features from images
+        x = self.pool(torch.relu(self.conv1(x)))  # (batch, 8, 14, 14)
+        x = self.pool(torch.relu(self.conv2(x)))  # (batch, 16, 5, 5)
+        x = x.view(-1, 16 * 5 * 5)                # (batch, 400)
+        x = torch.tanh(self.fc1(x))               # (batch, num_qubits)
         
-        # CNN feature extraction
-        x = self.pool(torch.relu(self.conv1(x)))
-        x = self.pool(torch.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)
-        x = torch.tanh(self.fc1(x))  # Shape: (batch_size, num_qubits)
+        # ============================================================
+        # QUANTUM LAYER
+        # ============================================================
+        # Apply the learned unitary transformation U = sum(w_i * RBS_net_i)
+        # TorchLayer automatically handles batching
+        # Input: (batch, num_qubits) classical features
+        # Output: (batch, num_qubits) quantum expectation values
+        x = self.qlayer(x)
         
-        # Quantum layer: process each sample individually
-        quantum_outputs = []
-        for i in range(batch_size):
-            sample = x[i]  # Shape: (num_qubits,)
-            qout = self.quantum_circuit(sample, self.quantum_weights)
-            quantum_outputs.append(torch.stack(qout).float())  # Ensure float32
-        
-        x = torch.stack(quantum_outputs)  # Shape: (batch_size, num_qubits)
-        
-        # Final classification
-        x = self.fc2(x)
+        # ============================================================
+        # FINAL CLASSIFICATION
+        # ============================================================
+        # Map quantum outputs to class logits
+        x = self.fc2(x)  # (batch, 10)
         return x
 
 
