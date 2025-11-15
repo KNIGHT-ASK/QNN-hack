@@ -11,6 +11,11 @@ This test suite verifies:
 Requirements tested: 1.2, 2.1, 2.2, 2.4
 """
 
+import sys
+import os
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import numpy as np
 import torch
 import pytest

@@ -4,7 +4,11 @@ Integration test for complete QNN forward pass.
 Tests QNN initialization and forward pass with the new decomposition approach.
 Verifies that the model produces valid outputs without NaN or Inf values.
 """
+import sys
 import os
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import torch
 import numpy as np
 

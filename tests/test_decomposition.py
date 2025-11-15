@@ -9,6 +9,11 @@ This verifies that:
 
 This is the CORE of the density QNN approach!
 """
+import sys
+import os
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import torch
 import numpy as np
 from scipy.linalg import schur

@@ -49,6 +49,10 @@ Key Findings:
 4. Performance impact is negligible (~1 ms overhead per batch)
 5. Correctness is guaranteed with the new approach
 """
+import sys
+import os
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
 import tracemalloc

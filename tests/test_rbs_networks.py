@@ -3,6 +3,10 @@ Test suite for RBS networks and entanglement patterns.
 Tests all 4 patterns from Figure 9 of the paper.
 """
 import sys
+import os
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import io
 # Fix Windows console encoding for Unicode characters
 if sys.platform == 'win32':

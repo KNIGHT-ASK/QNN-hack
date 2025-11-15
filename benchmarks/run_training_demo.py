@@ -11,11 +11,15 @@ This script performs REAL training (not just tests):
 
 import sys
 import io
+import os
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
-import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -34,9 +38,9 @@ print("REAL QNN TRAINING DEMO")
 print("="*80)
 
 # Configuration
-BATCH_SIZE = 4
-NUM_EPOCHS = 2
-NUM_BATCHES_PER_EPOCH = 10  # Small number for demo
+BATCH_SIZE = 40
+NUM_EPOCHS = 10
+NUM_BATCHES_PER_EPOCH = 100  # Small number for demo
 LEARNING_RATE = 0.001
 
 print(f"\nConfiguration:")

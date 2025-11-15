@@ -9,7 +9,11 @@ This test verifies that:
 
 Requirements tested: 3.4, 5.5
 """
+import sys
 import os
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import torch
 import torch.nn as nn
 import numpy as np

@@ -1,4 +1,9 @@
 """Simple test of decomposition with known matrix"""
+import sys
+import os
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import numpy as np
 import torch
 from walsh_circuit_decomposition import build_optimal_walsh_circuit
